@@ -54,29 +54,33 @@
 
     - name: Ensure MUNGE key permissions are correct
       ansible.builtin.file:
-        path: "{{ munge_key_path }}"
-        owner: "{{ munge_user }}"
-        group: "{{ munge_group }}"
+        path: "/etc/munge/munge.key"
+        owner: munge
+        group: munge
         mode: '0600'
-
+        
     - name: Enable and start MUNGE service
       ansible.builtin.systemd:
-        name: "{{ munge_service_name }}"
+        name: munge
         enabled: yes
         state: started
 
-- name: Copy key from head node to compute nodes
+- name: Fetch file from head node
+  hosts: head-node
+  become: yes
+  tasks:
+    - fetch:
+        src: /etc/munge/munge.key
+        dest: /tmp/fetched
+        flat: yes
+
+- name: Copy file to compute nodes
   hosts: compute-node
   become: yes
   tasks:
-    - name: Transfer file from head node to compute nodes
-      synchronize:
-        src: /etc/munge/munge.key
+    - copy:
+        src: /tmp/fetched
         dest: /etc/munge/munge.key
-      delegate_to: head-node
-
-    - name: Enable and start MUNGE service
-      ansible.builtin.systemd:
-        name: "{{ munge_service_name }}"
-        enabled: yes
-        state: started
+        owner: munge
+        group: munge
+        mode: '0600'
