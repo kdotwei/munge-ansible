@@ -1,52 +1,39 @@
 ---
-- name: Deploy and configure MUNGE
+- name: Setup clock and timezone
+  hosts: all
+  become: yes
+  tasks:
+    - name: Ensure correct timezone is set
+      timezone:
+        name: "Asia/Taipei"
+
+    - name: Install NTP package
+      ansible.builtin.package:
+        name: ntp
+        state: present
+
+    - name: Update and upgrade apt packages
+      become: true
+      apt:
+        update_cache: yes
+        upgrade: yes
+
+- name: Install MUNGE on all nodes
   hosts: all
   become: yes
 
-  vars:
-    munge_user: "munge"
-    munge_group: "munge"
-    munge_key_path: "/etc/munge/munge.key"
-    munge_service_name: "munge"
-    munge_package_name: "munge"
-    munge_devel_package: "munge-devel"
-    munge_log_dir: "/var/log/munge"
-    munge_lib_dir: "/var/lib/munge"
-    munge_run_dir: "/run/munge"
-
   tasks:
-    - name: Ensure MUNGE group exists
-      ansible.builtin.group:
-        name: "{{ munge_group }}"
-        state: present
-
-    - name: Ensure MUNGE user exists with nologin shell
-      ansible.builtin.user:
-        name: "{{ munge_user }}"
-        group: "{{ munge_group }}"
-        create_home: no
-        shell: /usr/sbin/nologin
-        state: present
+    - name: Update APT package list
+      apt:
+        update_cache: yes
 
     - name: Install MUNGE and development package
-      command: apt install -y munge
+      apt:
+        name:
+          - munge
+        state: present
 
-    - name: Ensure MUNGE directories exist
-      ansible.builtin.file:
-        path: "{{ item.path }}"
-        state: directory
-        owner: "{{ munge_user }}"
-        group: "{{ munge_group }}"
-        mode: "{{ item.mode }}"
-      loop:
-        - { path: /etc/munge, mode: '0700' }
-        - { path: "{{ munge_lib_dir }}", mode: '0700' }
-        - { path: "{{ munge_log_dir }}", mode: '0700' }
-        - { path: "{{ munge_run_dir }}", mode: '0755' }
-      loop_control:
-        loop_var: item
-
-- name: Deploy and configure MUNGE
+- name: Configure MUNGE on head node
   hosts: head-node
   become: yes
   tasks:
@@ -71,6 +58,22 @@
         owner: "{{ munge_user }}"
         group: "{{ munge_group }}"
         mode: '0600'
+
+    - name: Enable and start MUNGE service
+      ansible.builtin.systemd:
+        name: "{{ munge_service_name }}"
+        enabled: yes
+        state: started
+
+- name: Copy key from head node to compute nodes
+  hosts: compute-node
+  become: yes
+  tasks:
+    - name: Transfer file from head node to compute nodes
+      synchronize:
+        src: /etc/munge/munge.key
+        dest: /etc/munge/munge.key
+      delegate_to: head-node
 
     - name: Enable and start MUNGE service
       ansible.builtin.systemd:
