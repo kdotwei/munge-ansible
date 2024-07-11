@@ -1,0 +1,66 @@
+---
+- name: Deploy and configure MUNGE
+  hosts: all
+  become: yes
+
+  vars:
+    munge_user: "munge"
+    munge_group: "munge"
+    munge_key_path: "/etc/munge/munge.key"
+    munge_service_name: "munge"
+    munge_package_name: "munge"
+    munge_devel_package: "munge-devel"
+    munge_log_dir: "/var/log/munge"
+    munge_lib_dir: "/var/lib/munge"
+    munge_run_dir: "/run/munge"
+
+  tasks:
+    - name: Ensure MUNGE group exists
+      ansible.builtin.group:
+        name: "{{ munge_group }}"
+        state: present
+
+    - name: Ensure MUNGE user exists with nologin shell
+      ansible.builtin.user:
+        name: "{{ munge_user }}"
+        group: "{{ munge_group }}"
+        create_home: no
+        shell: /usr/sbin/nologin
+        state: present
+
+    - name: Install MUNGE and development package
+      command: apt install -y munge
+
+    - name: Ensure MUNGE directories exist
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ munge_user }}"
+        group: "{{ munge_group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /etc/munge, mode: '0700' }
+        - { path: "{{ munge_lib_dir }}", mode: '0700' }
+        - { path: "{{ munge_log_dir }}", mode: '0700' }
+        - { path: "{{ munge_run_dir }}", mode: '0755' }
+      loop_control:
+        loop_var: item
+
+    - name: Generate MUNGE key
+      ansible.builtin.command: "/usr/sbin/mungekey --verbose --force"
+      args:
+        creates: "{{ munge_key_path }}"
+      become_user: "{{ munge_user }}"
+
+    - name: Ensure MUNGE key permissions are correct
+      ansible.builtin.file:
+        path: "{{ munge_key_path }}"
+        owner: "{{ munge_user }}"
+        group: "{{ munge_group }}"
+        mode: '0600'
+
+    - name: Enable and start MUNGE service
+      ansible.builtin.systemd:
+        name: "{{ munge_service_name }}"
+        enabled: yes
+        state: started
