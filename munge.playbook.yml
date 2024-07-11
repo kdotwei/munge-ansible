@@ -84,3 +84,12 @@
         owner: munge
         group: munge
         mode: '0600'
+
+- name: Restart MUNGE on all nodes
+  hosts: all
+  become: yes
+  tasks:
+    - ansible.builtin.systemd:
+        name: "munge"
+        enabled: yes
+        state: restarted

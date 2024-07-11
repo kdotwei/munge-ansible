@@ -1,19 +1,8 @@
-- name: Fetch file from head node
-  hosts: head-node
+- name: Restart MUNGE on all nodes
+  hosts: all
   become: yes
   tasks:
-    - fetch:
-        src: /etc/munge/munge.key
-        dest: /tmp/fetched
-        flat: yes
-
-- name: Copy file to compute nodes
-  hosts: compute-node
-  become: yes
-  tasks:
-    - copy:
-        src: /tmp/fetched
-        dest: /etc/munge/munge.key
-        owner: munge
-        group: munge
-        mode: '0600'
+    - ansible.builtin.systemd:
+        name: "munge"
+        enabled: yes
+        state: restarted
