@@ -46,11 +46,24 @@
       loop_control:
         loop_var: item
 
-    - name: Generate MUNGE key
-      ansible.builtin.command: "/usr/sbin/mungekey --verbose --force"
+- name: Deploy and configure MUNGE
+  hosts: head-node
+  become: yes
+  tasks:
+    - name: Generate a new munge key
+      command: dd if=/dev/urandom of=/etc/munge/munge.key bs=1 count=1024
       args:
-        creates: "{{ munge_key_path }}"
-      become_user: "{{ munge_user }}"
+        creates: /etc/munge/munge.key
+      register: dd_output
+      ignore_errors: yes
+
+    - name: Ensure correct permissions for munge key
+      file:
+        path: /etc/munge/munge.key
+        owner: munge
+        group: munge
+        mode: '0600'
+      when: dd_output.changed
 
     - name: Ensure MUNGE key permissions are correct
       ansible.builtin.file:
